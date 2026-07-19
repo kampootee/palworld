@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Palworld Base Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Custom scrollbar for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280; 
+        }
+
+        /* Prevent text selection on trait buttons to avoid highlighting when rapidly clicking */
+        .no-select {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 min-h-screen p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <!-- Header Section -->
+        <div class="bg-gray-800 rounded-xl p-6 shadow-lg mb-6 border border-gray-700 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div>
+                <h1 class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 mb-2">Palworld Base Tracker</h1>
+                <p class="text-gray-400 text-sm mb-3">Track your base's suitabilities and optimize your workforce.</p>
+                <div id="api-status" class="inline-flex items-center gap-2 px-2 py-1 rounded text-xs font-semibold bg-gray-700 text-gray-300">
+                    <i class="fa-solid fa-spinner fa-spin"></i> Loading Data...
+                </div>
+            </div>
+            
+            <div class="flex flex-wrap items-center justify-center gap-4 bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                <div class="flex items-center gap-4">
+                    <span class="text-gray-400 font-semibold uppercase tracking-wider text-sm">Base Level</span>
+                    <div class="flex items-center bg-gray-800 rounded-lg border border-gray-600 overflow-hidden">
+                        <button id="btn-level-down" class="px-4 py-2 hover:bg-gray-700 active:bg-gray-600 transition-colors border-r border-gray-600 text-gray-300"><i class="fa-solid fa-minus"></i></button>
+                        <span id="base-level-display" class="px-6 py-2 font-bold text-xl min-w-[3rem] text-center text-white">1</span>
+                        <button id="btn-level-up" class="px-4 py-2 hover:bg-gray-700 active:bg-gray-600 transition-colors border-l border-gray-600 text-gray-300"><i class="fa-solid fa-plus"></i></button>
+                    </div>
+                </div>
+                
+                <div class="h-10 w-px bg-gray-700 hidden md:block"></div>
+                
+                <div class="flex flex-col items-center">
+                    <span class="text-gray-400 font-semibold uppercase tracking-wider text-[10px] mb-1">Active Pals</span>
+                    <div class="flex items-baseline gap-1" id="active-pals-display">
+                        <span id="active-pals-count" class="text-2xl font-bold text-emerald-400">0</span>
+                        <span class="text-gray-500 font-medium text-sm">/</span>
+                        <span id="max-pals-count" class="text-gray-400 font-medium text-sm">1</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-6 items-start">
+            
+            <!-- Left Column: Summary -->
+            <div class="w-full lg:w-1/3 flex-shrink-0">
+                <div class="bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-700 sticky top-4">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-200 border-b border-gray-600 pb-2">Base Suitability Tally</h2>
+                    <div id="summary-container" class="flex flex-col gap-2">
+                        <!-- Summary items will be injected here via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Worker Slots -->
+            <div class="w-full lg:w-2/3">
+                <div id="active-pals-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Pal Slots will be injected here via JS -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // Data definition for Palworld Suitabilities
+        const SUITABILITIES = [
+            { id: 'kindling', name: 'Kindling', icon: '🔥', color: 'text-orange-500', bg: 'bg-orange-900/30 border-orange-700/50' },
+            { id: 'watering', name: 'Watering', icon: '💧', color: 'text-blue-500', bg: 'bg-blue-900/30 border-blue-700/50' },
+            { id: 'planting', name: 'Planting', icon: '🌱', color: 'text-green-500', bg: 'bg-green-900/30 border-green-700/50' },
+            { id: 'electricity', name: 'Generating Electricity', icon: '⚡', color: 'text-yellow-400', bg: 'bg-yellow-900/30 border-yellow-700/50' },
+            { id: 'handiwork', name: 'Handiwork', icon: '🛠️', color: 'text-stone-400', bg: 'bg-stone-800/50 border-stone-600/50' },
+            { id: 'gathering', name: 'Gathering', icon: '🌿', color: 'text-emerald-400', bg: 'bg-emerald-900/30 border-emerald-700/50' },
+            { id: 'lumbering', name: 'Lumbering', icon: '🪵', color: 'text-amber-600', bg: 'bg-amber-900/30 border-amber-700/50' },
+            { id: 'mining', name: 'Mining', icon: '⛏️', color: 'text-slate-400', bg: 'bg-slate-800/50 border-slate-600/50' },
+            { id: 'medicine', name: 'Medicine Production', icon: '💊', color: 'text-teal-400', bg: 'bg-teal-900/30 border-teal-700/50' },
+            { id: 'cooling', name: 'Cooling', icon: '❄️', color: 'text-cyan-400', bg: 'bg-cyan-900/30 border-cyan-700/50' },
+            { id: 'transporting', name: 'Transporting', icon: '📦', color: 'text-indigo-400', bg: 'bg-indigo-900/30 border-indigo-700/50' },
+            { id: 'farming', name: 'Farming', icon: '🚧', color: 'text-lime-500', bg: 'bg-lime-900/30 border-lime-700/50' }
+        ];
+
+        // Dynamic Database from JSON
+        let PAL_DATABASE = [];
+
+        // Fallback Database in case local fetch fails
+        const FALLBACK_DATABASE = [
+            { name: "Anubis", traits: { handiwork: 4, transporting: 2, mining: 3 } },
+            { name: "Jormuntide Ignis", traits: { kindling: 4 } },
+            { name: "Lyleen", traits: { planting: 4, handiwork: 3, gathering: 2, medicine: 3 } },
+            { name: "Orserk", traits: { electricity: 4, handiwork: 2, transporting: 3 } },
+            { name: "Frostallion", traits: { cooling: 4 } },
+            { name: "Wumpo", traits: { transporting: 4, handiwork: 2, lumbering: 3, cooling: 2 } }
+        ];
+
+        // Application State
+        let state = {
+            baseLevel: 1,
+            maxSlots: 1, 
+            workers: [
+                { id: Date.now(), traits: {} }
+            ]
+        };
+
+        function loadState() {
+            const saved = localStorage.getItem('palworldTrackerState');
+            if (saved) {
+                try {
+                    const parsedState = JSON.parse(saved);
+                    if (parsedState && parsedState.baseLevel) {
+                        state = parsedState;
+                    }
+                } catch (e) {
+                    console.error("Failed to load state from local storage:", e);
+                }
+            }
+        }
+
+        function saveState() {
+            try {
+                localStorage.setItem('palworldTrackerState', JSON.stringify(state));
+            } catch (e) {
+                console.error("Failed to save state to local storage:", e);
+            }
+        }
+
+        const apiStatus = document.getElementById('api-status');
+
+        async function fetchPalData() {
+            try {
+                // Try to load our generated pals_database.json
+                const response = await fetch('pals_database.json');
+                
+                if (!response.ok) throw new Error("Local JSON file not found");
+                
+                PAL_DATABASE = await response.json();
+                
+                apiStatus.innerHTML = `<i class="fa-solid fa-folder-open text-blue-400"></i> Local DB Loaded (${PAL_DATABASE.length} Pals)`;
+                apiStatus.className = "inline-flex items-center gap-2 px-2 py-1 rounded text-xs font-semibold bg-blue-900/30 text-blue-400 border border-blue-700/50";
+            } catch (error) {
+                console.warn("Could not load pals_database.json, using fallback data.", error);
+                PAL_DATABASE = [...FALLBACK_DATABASE];
+                
+                apiStatus.innerHTML = `<i class="fa-solid fa-database text-yellow-400"></i> Fallback Data Mode`;
+                apiStatus.className = "inline-flex items-center gap-2 px-2 py-1 rounded text-xs font-semibold bg-yellow-900/30 text-yellow-400 border border-yellow-700/50";
+            }
+        }
+
+        const levelDisplay = document.getElementById('base-level-display');
+        const btnLevelUp = document.getElementById('btn-level-up');
+        const btnLevelDown = document.getElementById('btn-level-down');
+        const summaryContainer = document.getElementById('summary-container');
+        const activePalsCount = document.getElementById('active-pals-count');
+        const maxPalsCount = document.getElementById('max-pals-count');
+        const activePalsContainer = document.getElementById('active-pals-container');
+
+        async function init() {
+            await fetchPalData();
+            loadState();
+            
+            levelDisplay.textContent = state.baseLevel;
+            btnLevelUp.addEventListener('click', () => changeBaseLevel(1));
+            btnLevelDown.addEventListener('click', () => changeBaseLevel(-1));
+
+            updateSummary();
+            renderWorkers();
+            updateHeaderCounts();
+        }
+
+        function changeBaseLevel(change) {
+            const newLevel = state.baseLevel + change;
+            if (newLevel >= 1) {
+                state.baseLevel = newLevel;
+                state.maxSlots = newLevel; 
+                
+                // Add or remove worker slots based on level change
+                if (change > 0) {
+                    state.workers.push({ id: Date.now(), traits: {} });
+                } else if (change < 0 && state.workers.length > state.maxSlots) {
+                    state.workers.pop(); 
+                }
+                
+                levelDisplay.textContent = state.baseLevel;
+                renderWorkers();
+                updateSummary();
+                updateHeaderCounts();
+                saveState();
+            }
+        }
+
+        function calculateTotalTraits() {
+            const totals = {};
+            const palCounts = {};
+
+            SUITABILITIES.forEach(s => {
+                totals[s.id] = 0;
+                palCounts[s.id] = 0;
+            });
+
+            state.workers.forEach(worker => {
+                if(worker.traits) {
+                    Object.entries(worker.traits).forEach(([traitId, level]) => {
+                        if (totals[traitId] !== undefined) {
+                            totals[traitId] += level;
+                            palCounts[traitId] += 1;
+                        }
+                    });
+                }
+            });
+            return { totals, palCounts };
+        }
+
+        function updateSummary() {
+            summaryContainer.innerHTML = '';
+            const { totals, palCounts } = calculateTotalTraits();
+
+            SUITABILITIES.forEach(suit => {
+                const count = totals[suit.id];
+                const palCount = palCounts[suit.id];
+                
+                const item = document.createElement('div');
+                item.className = `flex items-center justify-between p-3 rounded-lg border transition-all duration-300 ${count > 0 ? suit.bg : 'bg-gray-800/50 border-gray-700/50 opacity-60'}`;
+                
+                let palStatusHtml = '';
+                if (palCount === 0) {
+                    palStatusHtml = `<span class="text-[10px] text-gray-500 font-semibold block mt-0.5">Missing</span>`;
+                } else if (palCount === 1) {
+                    palStatusHtml = `<span class="text-[10px] text-gray-400 font-medium block mt-0.5">1 Pal</span>`;
+                } else if (palCount === 2) {
+                    palStatusHtml = `<span class="text-[10px] text-gray-400 font-medium block mt-0.5">2 Pals</span>`;
+                } else {
+                    palStatusHtml = `<span class="text-[10px] text-yellow-400 font-bold block mt-0.5 animate-pulse"><i class="fa-solid fa-triangle-exclamation"></i> ${palCount} Pals (Overlap)</span>`;
+                }
+
+                // Enforce cap display logic
+                let displayCount = count;
+                let isMaxed = false;
+                if (count >= 10) {
+                    displayCount = 10;
+                    isMaxed = true;
+                }
+
+                item.innerHTML = `
+                    <div class="flex items-center flex-1 min-w-0 mr-2">
+                        <span class="text-2xl mr-3 flex-shrink-0">${suit.icon}</span>
+                        <div class="flex flex-col flex-1 min-w-0">
+                            <span class="text-sm font-medium ${count > 0 ? suit.color : 'text-gray-400'} truncate">${suit.name}</span>
+                            <div class="truncate">${palStatusHtml}</div>
+                        </div>
+                    </div>
+                    <div class="text-right flex flex-col items-end justify-center flex-shrink-0">
+                        <span class="text-[9px] text-gray-400 block uppercase tracking-wider mb-0.5">Total Lvl</span>
+                        <span class="font-bold text-lg px-2 rounded bg-black/40 border border-gray-700 min-w-[2rem] text-center inline-block ${isMaxed ? 'text-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.4)]' : ''}">${displayCount}</span>
+                    </div>
+                `;
+                
+                if (count > 10) {
+                    const warning = document.createElement('div');
+                    warning.className = "w-full text-center mt-1 text-[10px] font-bold text-red-400 bg-red-900/20 rounded py-0.5 border border-red-900/50";
+                    warning.innerText = `Over Max Lvl (Wasted)`;
+                    
+                    const wrapper = document.createElement('div');
+                    wrapper.className = "flex flex-col";
+                    wrapper.appendChild(item);
+                    wrapper.appendChild(warning);
+                    summaryContainer.appendChild(wrapper);
+                } else {
+                    summaryContainer.appendChild(item);
+                }
+            });
+        }
+
+        function updateHeaderCounts() {
+            let activeCount = 0;
+            state.workers.forEach(w => {
+                if (w.traits && Object.keys(w.traits).length > 0) {
+                    activeCount++;
+                }
+            });
+            activePalsCount.textContent = activeCount;
+            maxPalsCount.textContent = state.maxSlots;
+
+            const displayContainer = document.getElementById('active-pals-display');
+            if (activeCount >= 10) {
+                displayContainer.innerHTML = `
+                    <span class="text-2xl font-bold text-yellow-400 shadow-yellow-400 drop-shadow-md"><i class="fa-solid fa-star text-sm mr-1"></i>${activeCount}</span>
+                    <span class="text-gray-500 font-medium text-sm">/</span>
+                    <span class="text-gray-400 font-medium text-sm">${state.maxSlots}</span>
+                `;
+            } else {
+                displayContainer.innerHTML = `
+                    <span class="text-2xl font-bold text-emerald-400">${activeCount}</span>
+                    <span class="text-gray-500 font-medium text-sm">/</span>
+                    <span class="text-gray-400 font-medium text-sm">${state.maxSlots}</span>
+                `;
+            }
+        }
+
+        function renderWorkers() {
+            activePalsContainer.innerHTML = '';
+
+            const displayWorkers = [...state.workers].reverse();
+
+            displayWorkers.forEach((worker, reverseIndex) => {
+                const actualIndex = state.workers.length - 1 - reverseIndex;
+                const workerNum = actualIndex + 1;
+                const hasTraits = worker.traits && Object.keys(worker.traits).length > 0;
+                
+                const card = document.createElement('div');
+                card.className = `p-3 rounded-xl border transition-all ${hasTraits ? 'bg-gray-800 border-gray-600 shadow-md' : 'bg-gray-800/60 border-gray-700/50 border-dashed'}`;
+
+                // Header with Autocomplete Input
+                const header = document.createElement('div');
+                header.className = "flex justify-between items-center mb-2 relative";
+                
+                const titleWrapper = document.createElement('div');
+                titleWrapper.className = "flex flex-col flex-1 relative mr-3";
+                
+                const titleLabel = document.createElement('span');
+                titleLabel.className = "text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1";
+                titleLabel.textContent = `Pal Slot ${workerNum}`;
+                
+                const searchInput = document.createElement('input');
+                searchInput.type = "text";
+                searchInput.placeholder = "Type a Pal name...";
+                searchInput.className = "bg-gray-900 border border-gray-600 text-gray-200 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 placeholder-gray-500";
+                
+                // Try to find if the current traits perfectly match a known pal (optional nicety to fill name)
+                const currentPalName = Object.keys(worker.traits).length > 0 ? worker.name : "";
+                if(currentPalName) searchInput.value = currentPalName;
+
+                const dropdown = document.createElement('div');
+                dropdown.className = "absolute top-full left-0 right-0 mt-1 bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-10 hidden max-h-48 overflow-y-auto";
+                
+                // Autocomplete Event Listeners
+                searchInput.addEventListener('input', (e) => {
+                    const val = e.target.value.toLowerCase();
+                    dropdown.innerHTML = '';
+                    if (!val) {
+                        dropdown.classList.add('hidden');
+                        return;
+                    }
+                    
+                    const matches = PAL_DATABASE.filter(pal => pal.name.toLowerCase().includes(val));
+                    
+                    if (matches.length > 0) {
+                        dropdown.classList.remove('hidden');
+                        matches.forEach(pal => {
+                            const option = document.createElement('div');
+                            option.className = "p-2 hover:bg-gray-600 cursor-pointer text-sm text-gray-200 border-b border-gray-600/50 last:border-0";
+                            option.textContent = pal.name;
+                            option.addEventListener('click', () => {
+                                searchInput.value = pal.name;
+                                worker.name = pal.name;
+                                worker.traits = { ...pal.traits };
+                                dropdown.classList.add('hidden');
+                                renderWorkers();
+                                updateSummary();
+                                updateHeaderCounts();
+                                saveState();
+                            });
+                            dropdown.appendChild(option);
+                        });
+                    } else {
+                        dropdown.classList.add('hidden');
+                    }
+                });
+
+                // Hide dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (e.target !== searchInput) dropdown.classList.add('hidden');
+                });
+
+                titleWrapper.appendChild(titleLabel);
+                titleWrapper.appendChild(searchInput);
+                titleWrapper.appendChild(dropdown);
+
+                const clearBtn = document.createElement('button');
+                clearBtn.className = `text-xs p-1.5 rounded transition-colors ${hasTraits ? 'text-gray-400 hover:text-red-400 hover:bg-red-400/10' : 'text-gray-700 cursor-not-allowed'}`;
+                clearBtn.innerHTML = '<i class="fa-solid fa-trash-can text-base" title="Clear Pal"></i>';
+                clearBtn.disabled = !hasTraits;
+                clearBtn.addEventListener('click', () => {
+                    worker.traits = {};
+                    worker.name = ""; // Clear name memory too
+                    renderWorkers();
+                    updateSummary();
+                    updateHeaderCounts();
+                    saveState();
+                });
+
+                header.appendChild(titleWrapper);
+                header.appendChild(clearBtn);
+                card.appendChild(header);
+
+                const grid = document.createElement('div');
+                grid.className = "grid grid-cols-4 gap-1.5";
+
+                SUITABILITIES.forEach(suit => {
+                    const currentLevel = worker.traits[suit.id] || 0;
+                    const btn = document.createElement('button');
+                    
+                    const isActive = currentLevel > 0;
+                    
+                    btn.className = `no-select relative flex flex-col items-center justify-center p-1.5 rounded-lg border transition-all duration-200 aspect-square
+                        ${isActive 
+                            ? `${suit.bg} ${suit.color} border-current opacity-100 scale-100 hover:brightness-110` 
+                            : 'bg-gray-900/50 border-gray-700/50 text-gray-600 opacity-50 hover:opacity-80 scale-95 hover:scale-100 hover:bg-gray-800'
+                        }`;
+                    
+                    btn.title = `${suit.name} (Lvl ${currentLevel})`;
+                    
+                    btn.innerHTML = `
+                        <span class="text-xl mb-0.5">${suit.icon}</span>
+                        ${isActive ? `<span class="absolute -top-1 -right-1 bg-gray-900 border border-current w-4 h-4 flex items-center justify-center rounded-full text-[9px] font-bold text-white shadow-md">${currentLevel}</span>` : ''}
+                    `;
+
+                    // Left click to increment
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        cycleTrait(worker, suit.id, 1);
+                    });
+
+                    // Right click to decrement
+                    btn.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        cycleTrait(worker, suit.id, -1);
+                    });
+
+                    grid.appendChild(btn);
+                });
+
+                card.appendChild(grid);
+                activePalsContainer.appendChild(card);
+            });
+        }
+
+        function cycleTrait(worker, traitId, change) {
+            let currentLevel = worker.traits[traitId] || 0;
+            currentLevel += change;
+
+            // Enforce bounds: minimum 0, maximum 10
+            if (currentLevel > 10) currentLevel = 10;
+            if (currentLevel < 0) currentLevel = 0;
+
+            if (currentLevel === 0) {
+                delete worker.traits[traitId];
+            } else {
+                worker.traits[traitId] = currentLevel;
+            }
+            
+            // Clear the "name" memory if we manually edit traits so the box doesn't falsely claim a specific Pal
+            worker.name = ""; 
+            
+            renderWorkers(); 
+            updateSummary();
+            updateHeaderCounts();
+            saveState();
+        }
+
+        // Run application
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
