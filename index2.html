@@ -12,11 +12,12 @@
 </head>
 <body class="min-h-screen p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
+        <!-- Header -->
         <div class="flex flex-col md:flex-row justify-between items-center mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             <div>
                 <h1 class="text-3xl font-bold text-gray-900 mb-2">Palworld Base Tracker</h1>
                 <div id="api-status" class="inline-flex items-center gap-2 px-3 py-1 rounded text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200">
-                    <i class="fa-solid fa-spinner fa-spin"></i> Loading DB...
+                    <i class="fa-solid fa-spinner fa-spin"></i> Loading Local DB...
                 </div>
             </div>
             <div class="flex items-center gap-6 mt-4 md:mt-0 bg-gray-50 p-4 rounded-lg border border-gray-200">
@@ -32,14 +33,15 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <!-- Summary -->
+            <!-- Summary Sidebar -->
             <div class="lg:col-span-1">
                 <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-                    <h2 class="text-lg font-bold mb-4 text-gray-800 border-b pb-2">Suitability Count</h2>
+                    <h2 class="text-lg font-bold mb-4 text-gray-800 border-b pb-2">Pal Count per Trait</h2>
                     <div id="summary-container" class="flex flex-col gap-2"></div>
                 </div>
             </div>
-            <!-- Workforce -->
+
+            <!-- Workforce Grid -->
             <div class="lg:col-span-3">
                 <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
                     <div class="flex justify-between items-center mb-6">
@@ -75,13 +77,14 @@
             try {
                 const response = await fetch('pals_database.json');
                 const rawData = await response.json();
+                // Expecting structure: { "Name": "...", "Work Suitability": "..." }
                 PAL_DATABASE = rawData.map(pal => ({
                     name: pal.Name,
                     traits: parseTraits(pal["Work Suitability"])
                 }));
                 document.getElementById('api-status').innerHTML = `<i class="fa-solid fa-check text-emerald-500"></i> DB Loaded`;
             } catch (e) {
-                document.getElementById('api-status').innerText = "DB Error";
+                document.getElementById('api-status').innerText = "DB Error (Ensure pals_database.json exists)";
             }
         }
 
@@ -118,14 +121,21 @@
             [...state.workers].reverse().forEach((w) => {
                 const div = document.createElement('div');
                 div.className = "p-4 border rounded-lg bg-white shadow-sm";
-                div.innerHTML = `<input type="text" placeholder="Search Pal..." class="w-full border-b mb-2 focus:outline-none" oninput="handleSearch(${w.id}, this.value)">`;
+                
+                const input = document.createElement('input');
+                input.type = "text";
+                input.placeholder = "Search Pal Name...";
+                input.className = "w-full border-b mb-2 focus:outline-none";
+                input.oninput = (e) => handleSearch(w.id, e.target.value);
+                div.appendChild(input);
+
                 const traitDiv = document.createElement('div');
                 traitDiv.className = "flex gap-2 flex-wrap";
                 SUITABILITIES.forEach(s => {
                     const btn = document.createElement('button');
                     btn.className = "text-xs p-1 border rounded bg-gray-50 hover:bg-gray-100";
-                    btn.textContent = `${s.icon} ${w.traits[s.id] || 0}`;
-                    btn.onclick = () => { w.traits[s.id] = ((w.traits[s.id] || 0) + 1) % 11; fullRender(); };
+                    btn.innerHTML = `${s.icon} <b>${w.traits[s.id] || 0}</b>`;
+                    btn.onclick = () => { w.traits[s.id] = Math.min(10, (w.traits[s.id] || 0) + 1); fullRender(); };
                     btn.oncontextmenu = (e) => { e.preventDefault(); w.traits[s.id] = Math.max(0, (w.traits[s.id] || 0) - 1); fullRender(); };
                     traitDiv.appendChild(btn);
                 });
@@ -156,6 +166,7 @@
         window.onload = async () => {
             const saved = localStorage.getItem('tracker');
             if(saved) state = JSON.parse(saved);
+            document.getElementById('base-level-display').innerText = state.baseLevel;
             await fetchPalData();
             fullRender();
         };
