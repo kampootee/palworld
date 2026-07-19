@@ -7,39 +7,45 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background: #0b0f19; color: #e5e7eb; }
+        .no-select { user-select: none; }
+        .glass { background: rgba(31, 41, 55, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-200 min-h-screen p-8">
+<body class="p-4 md:p-8">
 
     <div class="max-w-7xl mx-auto">
-        <!-- Header -->
-        <div class="bg-gray-800 rounded-xl p-6 shadow-lg mb-6 border border-gray-700 flex flex-col md:flex-row items-center justify-between gap-6">
+        <header class="glass rounded-2xl p-6 mb-8 flex flex-col md:flex-row items-center justify-between shadow-2xl">
             <div>
-                <h1 class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">Palworld Base Tracker</h1>
-                <div id="api-status" class="text-xs font-semibold text-gray-400 mt-2">Initializing...</div>
+                <h1 class="text-4xl font-bold bg-gradient-to-r from-emerald-400 to-blue-500 bg-clip-text text-transparent">Palworld Base Tracker</h1>
+                <p class="text-gray-400 mt-1">Optimization Dashboard</p>
             </div>
-            <div class="flex items-center gap-4 bg-gray-900 p-3 rounded-lg border border-gray-700">
-                <span class="text-sm font-semibold text-gray-400">Base Level:</span>
-                <button onclick="changeBaseLevel(-1)" class="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600">-</button>
-                <span id="base-level-display" class="font-bold text-xl w-8 text-center">1</span>
-                <button onclick="changeBaseLevel(1)" class="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600">+</button>
-            </div>
-        </div>
-
-        <div class="flex flex-col lg:flex-row gap-6">
-            <!-- Sidebar: Permanent Tally -->
-            <div class="w-full lg:w-1/3">
-                <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
-                    <h2 class="text-xl font-semibold mb-4 border-b border-gray-600 pb-2">Base Suitability Tally</h2>
-                    <div id="tally-list" class="space-y-2"></div>
+            <div class="flex items-center gap-6 mt-4 md:mt-0 bg-gray-900/50 px-6 py-3 rounded-xl border border-gray-700">
+                <div class="flex flex-col items-center">
+                    <span class="text-[10px] uppercase font-bold text-gray-500">Base Level</span>
+                    <div class="flex items-center gap-4 mt-1">
+                        <button onclick="changeBaseLevel(-1)" class="w-8 h-8 rounded-full bg-gray-700 hover:bg-gray-600 transition"><i class="fas fa-minus text-xs"></i></button>
+                        <span id="base-level-display" class="text-2xl font-bold w-8 text-center">1</span>
+                        <button onclick="changeBaseLevel(1)" class="w-8 h-8 rounded-full bg-gray-700 hover:bg-gray-600 transition"><i class="fas fa-plus text-xs"></i></button>
+                    </div>
                 </div>
             </div>
-            <!-- Main: Pal Slots -->
-            <div class="w-full lg:w-2/3">
-                <div id="active-pals-container" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <!-- Left Sidebar -->
+            <aside class="lg:col-span-1 space-y-4">
+                <div class="glass rounded-2xl p-6 sticky top-8">
+                    <h2 class="text-lg font-semibold mb-6 flex items-center gap-2"><i class="fas fa-chart-pie text-emerald-400"></i> Total Suitability</h2>
+                    <div id="tally-list" class="space-y-3"></div>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="lg:col-span-3">
+                <div id="active-pals-container" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+            </main>
         </div>
     </div>
 
@@ -62,17 +68,23 @@
         let PAL_DATABASE = [];
         let state = { baseLevel: 1, workers: [{ id: Date.now(), name: "", traits: {} }] };
 
+        // Color helper: Red to Green progression (0 -> 10+)
+        function getLevelColor(level) {
+            if (level === 0) return 'text-gray-500 border-gray-700';
+            if (level <= 2) return 'text-red-400 border-red-900/50';
+            if (level <= 5) return 'text-orange-400 border-orange-900/50';
+            if (level < 10) return 'text-yellow-400 border-yellow-700/50';
+            return 'text-emerald-400 border-emerald-700/50';
+        }
+
         async function fetchPalData() {
             try {
                 const res = await fetch('pals_database.json');
                 PAL_DATABASE = await res.json();
-                document.getElementById('api-status').innerText = "Database Loaded Successfully";
             } catch(e) {
-                document.getElementById('api-status').innerText = "Using Internal Defaults (JSON file not found)";
                 PAL_DATABASE = [{ name: "Anubis", traits: { handiwork: 4, mining: 3 } }];
             }
-            renderWorkers();
-            updateSummary();
+            renderAll();
         }
 
         function changeBaseLevel(val) {
@@ -80,84 +92,81 @@
             if (val > 0) state.workers.push({ id: Date.now(), name: "", traits: {} });
             else if (state.workers.length > 1) state.workers.pop();
             document.getElementById('base-level-display').innerText = state.baseLevel;
-            renderWorkers();
-            updateSummary();
+            renderAll();
         }
 
-        function updateSummary() {
+        function renderAll() {
+            renderSummary();
+            renderWorkers();
+        }
+
+        function renderSummary() {
             const container = document.getElementById('tally-list');
             container.innerHTML = '';
             const totals = {};
-            
             state.workers.forEach(w => {
-                for(let trait in w.traits) {
-                    totals[trait] = (totals[trait] || 0) + w.traits[trait];
-                }
+                for(let trait in w.traits) totals[trait] = (totals[trait] || 0) + w.traits[trait];
             });
 
-            // Permanently show all suitabilities
             SUITABILITIES.forEach(suit => {
                 const count = totals[suit.id] || 0;
-                const item = document.createElement('div');
-                item.className = "flex items-center justify-between p-3 bg-gray-900 rounded-lg border border-gray-700";
-                item.innerHTML = `
-                    <span class="flex items-center gap-2"><span class="text-xl">${suit.icon}</span> ${suit.name}</span>
-                    <span class="font-bold text-lg ${count === 0 ? 'text-gray-600' : 'text-white'}">${count}</span>
+                const div = document.createElement('div');
+                div.className = `flex items-center justify-between p-3 rounded-lg bg-gray-900 border ${getLevelColor(count)}`;
+                div.innerHTML = `
+                    <span class="flex items-center gap-3 font-medium text-sm"><span class="text-lg">${suit.icon}</span> ${suit.name}</span>
+                    <span class="font-bold text-lg">${count}</span>
                 `;
-                container.appendChild(item);
+                container.appendChild(div);
             });
         }
 
         function renderWorkers() {
             const container = document.getElementById('active-pals-container');
             container.innerHTML = '';
-            state.workers.forEach((worker) => {
+            state.workers.forEach((worker, idx) => {
                 const card = document.createElement('div');
-                card.className = "bg-gray-800 p-4 rounded-xl border border-gray-700 relative";
+                card.className = "glass p-5 rounded-2xl relative overflow-hidden";
                 card.innerHTML = `
-                    <input type="text" placeholder="Search Pal..." class="search-input w-full bg-gray-900 border border-gray-600 rounded p-2 mb-2 text-sm text-white" value="${worker.name}">
-                    <div class="autocomplete-results hidden absolute z-10 bg-gray-700 w-[90%] left-4 mt-1 rounded border border-gray-600 max-h-40 overflow-y-auto"></div>
-                    <div class="grid grid-cols-4 gap-2"></div>
+                    <div class="absolute -right-2 -top-2 text-7xl font-black text-white/5 select-none z-0">#${idx + 1}</div>
+                    <div class="relative z-10">
+                        <input type="text" placeholder="Search Pal..." class="w-full bg-black/30 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:border-emerald-500" value="${worker.name}">
+                        <div class="autocomplete-results hidden absolute z-20 bg-gray-800 w-full mt-1 rounded-lg border border-gray-700 max-h-40 overflow-y-auto"></div>
+                        <div class="grid grid-cols-4 gap-2 mt-4"></div>
+                    </div>
                 `;
                 
+                // Search Logic
                 const input = card.querySelector('input');
                 const results = card.querySelector('.autocomplete-results');
-                input.addEventListener('input', (e) => {
+                input.oninput = (e) => {
                     const val = e.target.value.toLowerCase();
                     results.innerHTML = '';
                     if(!val) return results.classList.add('hidden');
                     const matches = PAL_DATABASE.filter(p => p.name.toLowerCase().includes(val));
-                    if(matches.length > 0) {
-                        results.classList.remove('hidden');
-                        matches.forEach(p => {
-                            const div = document.createElement('div');
-                            div.className = "p-2 hover:bg-gray-600 cursor-pointer text-sm text-white";
-                            div.textContent = p.name;
-                            div.onclick = () => {
-                                worker.name = p.name;
-                                worker.traits = {...p.traits};
-                                input.value = p.name;
-                                results.classList.add('hidden');
-                                renderWorkers();
-                                updateSummary();
-                            };
-                            results.appendChild(div);
-                        });
-                    } else results.classList.add('hidden');
-                });
+                    results.classList.toggle('hidden', matches.length === 0);
+                    matches.forEach(p => {
+                        const div = document.createElement('div');
+                        div.className = "p-2 hover:bg-emerald-900/50 cursor-pointer text-sm";
+                        div.textContent = p.name;
+                        div.onclick = () => {
+                            worker.name = p.name;
+                            worker.traits = {...p.traits};
+                            renderAll();
+                        };
+                        results.appendChild(div);
+                    });
+                };
 
+                // Traits Grid
                 const grid = card.querySelector('.grid');
-                // Only show traits that the Pal actually has
                 SUITABILITIES.forEach(s => {
                     if (worker.traits[s.id] > 0) {
                         const btn = document.createElement('button');
-                        btn.className = "p-1 bg-gray-900 rounded text-center text-xs border border-gray-600 text-white";
-                        btn.innerHTML = `${s.icon}<br>${worker.traits[s.id] || 0}`;
+                        btn.className = `p-2 rounded-lg text-center text-xs border bg-black/20 ${getLevelColor(worker.traits[s.id])}`;
+                        btn.innerHTML = `${s.icon}<br><span class="font-bold">${worker.traits[s.id]}</span>`;
                         btn.onclick = () => {
-                            worker.traits[s.id] = (worker.traits[s.id] || 0) + 1;
-                            if(worker.traits[s.id] > 10) worker.traits[s.id] = 0;
-                            renderWorkers();
-                            updateSummary();
+                            worker.traits[s.id] = (worker.traits[s.id] % 10) + 1;
+                            renderAll();
                         };
                         grid.appendChild(btn);
                     }
