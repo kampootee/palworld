@@ -9,8 +9,8 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; background: #0b0f19; color: #e5e7eb; }
-        .no-select { user-select: none; }
         .glass { background: rgba(31, 41, 55, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .no-select { user-select: none; }
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -34,7 +34,6 @@
         </header>
 
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <!-- Left Sidebar -->
             <aside class="lg:col-span-1 space-y-4">
                 <div class="glass rounded-2xl p-6 sticky top-8">
                     <h2 class="text-lg font-semibold mb-6 flex items-center gap-2"><i class="fas fa-chart-pie text-emerald-400"></i> Total Suitability</h2>
@@ -42,7 +41,6 @@
                 </div>
             </aside>
 
-            <!-- Main Content -->
             <main class="lg:col-span-3">
                 <div id="active-pals-container" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
             </main>
@@ -68,13 +66,12 @@
         let PAL_DATABASE = [];
         let state = { baseLevel: 1, workers: [{ id: Date.now(), name: "", traits: {} }] };
 
-        // Color helper: Red to Green progression (0 -> 10+)
         function getLevelColor(level) {
-            if (level === 0) return 'text-gray-500 border-gray-700';
-            if (level <= 2) return 'text-red-400 border-red-900/50';
-            if (level <= 5) return 'text-orange-400 border-orange-900/50';
-            if (level < 10) return 'text-yellow-400 border-yellow-700/50';
-            return 'text-emerald-400 border-emerald-700/50';
+            if (level === 0) return 'text-gray-500 border-gray-700 bg-gray-900';
+            if (level <= 2) return 'text-red-400 border-red-900/50 bg-red-900/20';
+            if (level <= 5) return 'text-orange-400 border-orange-900/50 bg-orange-900/20';
+            if (level < 10) return 'text-yellow-400 border-yellow-700/50 bg-yellow-900/20';
+            return 'text-emerald-400 border-emerald-700/50 bg-emerald-900/20';
         }
 
         async function fetchPalData() {
@@ -111,7 +108,7 @@
             SUITABILITIES.forEach(suit => {
                 const count = totals[suit.id] || 0;
                 const div = document.createElement('div');
-                div.className = `flex items-center justify-between p-3 rounded-lg bg-gray-900 border ${getLevelColor(count)}`;
+                div.className = `flex items-center justify-between p-3 rounded-lg border ${getLevelColor(count)}`;
                 div.innerHTML = `
                     <span class="flex items-center gap-3 font-medium text-sm"><span class="text-lg">${suit.icon}</span> ${suit.name}</span>
                     <span class="font-bold text-lg">${count}</span>
@@ -129,15 +126,17 @@
                 card.innerHTML = `
                     <div class="absolute -right-2 -top-2 text-7xl font-black text-white/5 select-none z-0">#${idx + 1}</div>
                     <div class="relative z-10">
-                        <input type="text" placeholder="Search Pal..." class="w-full bg-black/30 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:border-emerald-500" value="${worker.name}">
-                        <div class="autocomplete-results hidden absolute z-20 bg-gray-800 w-full mt-1 rounded-lg border border-gray-700 max-h-40 overflow-y-auto"></div>
+                        <div class="relative">
+                            <input type="text" placeholder="Search Pal..." class="w-full bg-black/30 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:border-emerald-500" value="${worker.name}">
+                            <div class="autocomplete-results hidden absolute top-full left-0 w-full z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-h-40 overflow-y-auto"></div>
+                        </div>
                         <div class="grid grid-cols-4 gap-2 mt-4"></div>
                     </div>
                 `;
                 
-                // Search Logic
                 const input = card.querySelector('input');
                 const results = card.querySelector('.autocomplete-results');
+
                 input.oninput = (e) => {
                     const val = e.target.value.toLowerCase();
                     results.innerHTML = '';
@@ -146,23 +145,23 @@
                     results.classList.toggle('hidden', matches.length === 0);
                     matches.forEach(p => {
                         const div = document.createElement('div');
-                        div.className = "p-2 hover:bg-emerald-900/50 cursor-pointer text-sm";
+                        div.className = "p-2 hover:bg-emerald-900/50 cursor-pointer text-sm border-b border-gray-800 last:border-none";
                         div.textContent = p.name;
                         div.onclick = () => {
                             worker.name = p.name;
                             worker.traits = {...p.traits};
+                            results.classList.add('hidden');
                             renderAll();
                         };
                         results.appendChild(div);
                     });
                 };
 
-                // Traits Grid
                 const grid = card.querySelector('.grid');
                 SUITABILITIES.forEach(s => {
                     if (worker.traits[s.id] > 0) {
                         const btn = document.createElement('button');
-                        btn.className = `p-2 rounded-lg text-center text-xs border bg-black/20 ${getLevelColor(worker.traits[s.id])}`;
+                        btn.className = `p-2 rounded-lg text-center text-xs border ${getLevelColor(worker.traits[s.id])}`;
                         btn.innerHTML = `${s.icon}<br><span class="font-bold">${worker.traits[s.id]}</span>`;
                         btn.onclick = () => {
                             worker.traits[s.id] = (worker.traits[s.id] % 10) + 1;
