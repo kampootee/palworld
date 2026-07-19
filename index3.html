@@ -11,6 +11,8 @@
         body { font-family: 'Inter', sans-serif; background: #0b0f19; color: #e5e7eb; }
         .glass { background: rgba(31, 41, 55, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
         .no-select { user-select: none; }
+        /* Ensure dropdowns can appear outside their containers */
+        .z-50-override { z-index: 50 !important; }
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -70,9 +72,9 @@
         };
 
         function getLevelColor(level) {
-            if (level === 0) return 'text-gray-500 border-gray-700 bg-gray-900';
-            if (level <= 2) return 'text-red-400 border-red-900/50 bg-red-900/20';
-            if (level <= 5) return 'text-orange-400 border-orange-900/50 bg-orange-900/20';
+            if (level <= 0) return 'text-gray-500 border-gray-700 bg-gray-900';
+            if (level <= 3) return 'text-red-400 border-red-900/50 bg-red-900/20';
+            if (level <= 6) return 'text-orange-400 border-orange-900/50 bg-orange-900/20';
             if (level < 10) return 'text-yellow-400 border-yellow-700/50 bg-yellow-900/20';
             return 'text-emerald-400 border-emerald-700/50 bg-emerald-900/20';
         }
@@ -130,13 +132,13 @@
             container.innerHTML = '';
             state.workers.forEach((worker, idx) => {
                 const card = document.createElement('div');
-                card.className = "glass p-5 rounded-2xl relative overflow-hidden";
+                card.className = "glass p-5 rounded-2xl relative overflow-visible"; // Changed to visible
                 card.innerHTML = `
-                    <div class="absolute -right-2 -top-2 text-7xl font-black text-white/5 select-none z-0">#${idx + 1}</div>
+                    <div class="absolute -right-2 -top-2 text-7xl font-black text-white/5 select-none z-0 pointer-events-none">#${idx + 1}</div>
                     <div class="relative z-10">
                         <div class="relative">
                             <input type="text" placeholder="Search Pal..." class="w-full bg-black/30 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:border-emerald-500 text-white" value="${worker.name}">
-                            <div class="autocomplete-results hidden absolute top-full left-0 w-full z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-h-40 overflow-y-auto"></div>
+                            <div class="autocomplete-results hidden absolute top-full left-0 w-full z-50-override bg-gray-900 border border-gray-700 rounded-lg shadow-2xl max-h-60 overflow-y-auto"></div>
                         </div>
                         <div class="grid grid-cols-4 gap-2 mt-4"></div>
                     </div>
@@ -153,12 +155,13 @@
                     results.classList.toggle('hidden', matches.length === 0);
                     matches.forEach(p => {
                         const div = document.createElement('div');
-                        div.className = "p-2 hover:bg-emerald-900/50 cursor-pointer text-sm border-b border-gray-800 last:border-none text-white";
+                        div.className = "p-3 hover:bg-emerald-900/50 cursor-pointer text-sm border-b border-gray-800 last:border-none text-white";
                         div.textContent = p.name;
                         div.onclick = () => {
                             worker.name = p.name;
                             worker.traits = {...p.traits};
                             results.classList.add('hidden');
+                            input.value = p.name;
                             saveState();
                             renderAll();
                         };
@@ -168,7 +171,7 @@
 
                 const grid = card.querySelector('.grid');
                 SUITABILITIES.forEach(s => {
-                    if (worker.traits[s.id] > 0) {
+                    if (worker.traits[s.id] !== undefined && worker.traits[s.id] > 0) {
                         const btn = document.createElement('button');
                         btn.className = `p-2 rounded-lg text-center text-xs border ${getLevelColor(worker.traits[s.id])}`;
                         btn.innerHTML = `${s.icon}<br><span class="font-bold">${worker.traits[s.id]}</span>`;
