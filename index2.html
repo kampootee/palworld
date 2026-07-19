@@ -8,68 +8,109 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f9fafb; color: #1f2937; }
-        .suggestions { border: 1px solid #d1d5db; position: absolute; z-index: 50; width: calc(100% - 2rem); background: white; border-radius: 0.5rem; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-        .suggestion-item { padding: 0.75rem; cursor: pointer; border-bottom: 1px solid #f3f4f6; }
-        .suggestion-item:hover { background: #eff6ff; color: #1d4ed8; }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body class="min-h-screen p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
-        <div class="flex justify-between items-center mb-8 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-            <h1 class="text-3xl font-bold text-gray-900">Palworld Base Tracker</h1>
-            <div class="flex items-center gap-4">
-                <button id="btn-lvl-down" class="p-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition"><i class="fa-solid fa-minus"></i></button>
-                <span id="base-level-display" class="text-2xl font-bold w-12 text-center">1</span>
-                <button id="btn-lvl-up" class="p-3 bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition"><i class="fa-solid fa-plus"></i></button>
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 mb-2">Palworld Base Tracker</h1>
+                <div id="api-status" class="inline-flex items-center gap-2 px-3 py-1 rounded text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                    <i class="fa-solid fa-spinner fa-spin"></i> Loading Local DB...
+                </div>
+            </div>
+            <div class="flex items-center gap-6 mt-4 md:mt-0 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <div class="text-center">
+                    <span class="block text-xs text-gray-500 font-bold mb-1 uppercase tracking-wide">Base Level</span>
+                    <div class="flex items-center justify-center gap-3">
+                        <button id="btn-lvl-down" class="w-8 h-8 rounded-full bg-white hover:bg-gray-100 border border-gray-300"><i class="fa-solid fa-minus text-sm"></i></button>
+                        <span id="base-level-display" class="text-2xl font-bold w-10">1</span>
+                        <button id="btn-lvl-up" class="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700 text-white"><i class="fa-solid fa-plus text-sm"></i></button>
+                    </div>
+                </div>
             </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <!-- Summary Sidebar -->
             <div class="lg:col-span-1">
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-                    <h2 class="text-lg font-bold mb-4 text-gray-800">Team Summary</h2>
+                <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                    <h2 class="text-lg font-bold mb-4 text-gray-800 border-b pb-2">Pal Count per Trait</h2>
                     <div id="summary-container" class="flex flex-col gap-2"></div>
                 </div>
             </div>
+
+            <!-- Workforce Grid -->
             <div class="lg:col-span-3">
-                <div id="workers-container" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-bold text-gray-800">Pal Workforce</h2>
+                        <button id="clear-all-btn" class="text-sm px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded border border-red-200">Clear All</button>
+                    </div>
+                    <div id="workers-container" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Internal Database
-        const PAL_DATABASE = [
-            { "Name": "Anubis", "Work Suitability": "Handiwork 4, Transporting 2, Mining 3" },
-            { "Name": "Lamball", "Work Suitability": "Handiwork 1, Transporting 1, Farming 1" },
-            { "Name": "Jormuntide", "Work Suitability": "Watering 4" }
+        const SUITABILITIES = [
+            { id: 'kindling', name: 'Kindling', icon: '🔥' },
+            { id: 'watering', name: 'Watering', icon: '💧' },
+            { id: 'planting', name: 'Planting', icon: '🌱' },
+            { id: 'electricity', name: 'Electricity', icon: '⚡' },
+            { id: 'handiwork', name: 'Handiwork', icon: '🛠️' },
+            { id: 'gathering', name: 'Gathering', icon: '🌿' },
+            { id: 'lumbering', name: 'Lumbering', icon: '🪵' },
+            { id: 'mining', name: 'Mining', icon: '⛏️' },
+            { id: 'medicine', name: 'Medicine', icon: '💊' },
+            { id: 'cooling', name: 'Cooling', icon: '❄️' },
+            { id: 'transporting', name: 'Transporting', icon: '📦' },
+            { id: 'farming', name: 'Farming', icon: '🚧' }
         ];
 
+        let PAL_DATABASE = [];
         let state = { baseLevel: 1, workers: [{ id: Date.now(), traits: {} }] };
-        const SUITABILITIES = ['Kindling', 'Watering', 'Planting', 'Electricity', 'Handiwork', 'Gathering', 'Lumbering', 'Mining', 'Medicine', 'Cooling', 'Transporting', 'Farming'];
 
-        function init() {
-            const saved = localStorage.getItem('paltracker');
-            if(saved) state = JSON.parse(saved);
-            render();
+        async function fetchPalData() {
+            try {
+                const response = await fetch('pals_database.json');
+                const rawData = await response.json();
+                // Expecting structure: { "Name": "...", "Work Suitability": "..." }
+                PAL_DATABASE = rawData.map(pal => ({
+                    name: pal.Name,
+                    traits: parseTraits(pal["Work Suitability"])
+                }));
+                document.getElementById('api-status').innerHTML = `<i class="fa-solid fa-check text-emerald-500"></i> DB Loaded`;
+            } catch (e) {
+                document.getElementById('api-status').innerText = "DB Error (Ensure pals_database.json exists)";
+            }
         }
 
-        function render() {
-            document.getElementById('base-level-display').innerText = state.baseLevel;
-            updateSummary();
-            renderWorkers();
-            localStorage.setItem('paltracker', JSON.stringify(state));
+        function parseTraits(str) {
+            const traits = {};
+            if (!str) return traits;
+            str.split(',').forEach(p => {
+                const parts = p.trim().split(' ');
+                const val = parseInt(parts.pop());
+                const key = parts.join(' ').toLowerCase();
+                const traitMap = { "kindling": "kindling", "water": "watering", "plant": "planting", "electric": "electricity", "handiwork": "handiwork", "gather": "gathering", "lumber": "lumbering", "mine": "mining", "med": "medicine", "cool": "cooling", "transport": "transporting", "farm": "farming" };
+                if (traitMap[key]) traits[traitMap[key]] = val;
+            });
+            return traits;
         }
 
         function updateSummary() {
             const container = document.getElementById('summary-container');
             container.innerHTML = '';
             const counts = {};
-            state.workers.forEach(w => Object.keys(w.traits).forEach(t => counts[t] = (counts[t] || 0) + 1));
+            state.workers.forEach(w => Object.keys(w.traits).forEach(k => counts[k] = (counts[k] || 0) + 1));
+            
             SUITABILITIES.forEach(s => {
                 const div = document.createElement('div');
-                div.className = "flex justify-between p-3 bg-gray-50 rounded-lg text-sm border border-gray-100";
-                div.innerHTML = `<span class="font-medium text-gray-700">${s}</span> <span class="font-bold text-blue-600">${counts[s] || 0} Pals</span>`;
+                div.className = "flex justify-between items-center p-2 rounded bg-gray-50 border border-gray-100";
+                div.innerHTML = `<span>${s.icon} ${s.name}</span> <span class="font-bold text-blue-600">${counts[s.id] || 0} Pals</span>`;
                 container.appendChild(div);
             });
         }
@@ -77,54 +118,58 @@
         function renderWorkers() {
             const container = document.getElementById('workers-container');
             container.innerHTML = '';
-            state.workers.forEach((w, idx) => {
+            [...state.workers].reverse().forEach((w) => {
                 const div = document.createElement('div');
-                div.className = "bg-white p-5 rounded-2xl border border-gray-200 shadow-sm relative";
-                div.innerHTML = `
-                    <input type="text" placeholder="Search Pal Name..." class="w-full border-b-2 border-gray-100 mb-4 pb-1 focus:outline-none focus:border-blue-500 transition">
-                    <div class="suggestions hidden"></div>
-                    <div class="flex gap-2 flex-wrap text-xs text-gray-500 italic">
-                        ${Object.keys(w.traits).map(k => `<span class="bg-blue-50 text-blue-700 px-2 py-1 rounded">${k} (${w.traits[k]})</span>`).join('')}
-                    </div>
-                `;
+                div.className = "p-4 border rounded-lg bg-white shadow-sm";
                 
-                const input = div.querySelector('input');
-                const sugg = div.querySelector('.suggestions');
-                input.oninput = (e) => {
-                    const val = e.target.value.toLowerCase();
-                    sugg.innerHTML = '';
-                    if(!val) { sugg.classList.add('hidden'); return; }
-                    const matches = PAL_DATABASE.filter(p => p.Name.toLowerCase().includes(val));
-                    matches.forEach(m => {
-                        const opt = document.createElement('div');
-                        opt.className = "suggestion-item";
-                        opt.innerText = m.Name;
-                        opt.onclick = () => {
-                            w.traits = parseTraits(m["Work Suitability"]);
-                            render();
-                        };
-                        sugg.appendChild(opt);
-                    });
-                    sugg.classList.remove('hidden');
-                };
+                const input = document.createElement('input');
+                input.type = "text";
+                input.placeholder = "Search Pal Name...";
+                input.className = "w-full border-b mb-2 focus:outline-none";
+                input.oninput = (e) => handleSearch(w.id, e.target.value);
+                div.appendChild(input);
+
+                const traitDiv = document.createElement('div');
+                traitDiv.className = "flex gap-2 flex-wrap";
+                SUITABILITIES.forEach(s => {
+                    const btn = document.createElement('button');
+                    btn.className = "text-xs p-1 border rounded bg-gray-50 hover:bg-gray-100";
+                    btn.innerHTML = `${s.icon} <b>${w.traits[s.id] || 0}</b>`;
+                    btn.onclick = () => { w.traits[s.id] = Math.min(10, (w.traits[s.id] || 0) + 1); fullRender(); };
+                    btn.oncontextmenu = (e) => { e.preventDefault(); w.traits[s.id] = Math.max(0, (w.traits[s.id] || 0) - 1); fullRender(); };
+                    traitDiv.appendChild(btn);
+                });
+                div.appendChild(traitDiv);
                 container.appendChild(div);
             });
         }
 
-        function parseTraits(str) {
-            const traits = {};
-            str.split(',').forEach(p => {
-                const parts = p.trim().split(' ');
-                const level = parts.pop();
-                const type = parts.join(' ');
-                traits[type] = level;
-            });
-            return traits;
+        window.handleSearch = (id, val) => {
+            const pal = PAL_DATABASE.find(p => p.name.toLowerCase() === val.toLowerCase());
+            if (pal) {
+                const worker = state.workers.find(w => w.id === id);
+                worker.traits = { ...pal.traits };
+                fullRender();
+            }
+        };
+
+        function fullRender() {
+            renderWorkers();
+            updateSummary();
+            localStorage.setItem('tracker', JSON.stringify(state));
         }
 
-        document.getElementById('btn-lvl-up').onclick = () => { state.baseLevel++; state.workers.push({ id: Date.now(), traits: {} }); render(); };
-        document.getElementById('btn-lvl-down').onclick = () => { if(state.baseLevel > 1) { state.baseLevel--; state.workers.pop(); render(); } };
-        init();
+        document.getElementById('btn-lvl-up').onclick = () => { state.baseLevel++; state.workers.push({ id: Date.now(), traits: {} }); fullRender(); };
+        document.getElementById('btn-lvl-down').onclick = () => { if(state.baseLevel > 1) { state.baseLevel--; state.workers.pop(); fullRender(); } };
+        document.getElementById('clear-all-btn').onclick = () => { state.workers = [{ id: Date.now(), traits: {} }]; fullRender(); };
+
+        window.onload = async () => {
+            const saved = localStorage.getItem('tracker');
+            if(saved) state = JSON.parse(saved);
+            document.getElementById('base-level-display').innerText = state.baseLevel;
+            await fetchPalData();
+            fullRender();
+        };
     </script>
 </body>
 </html>
