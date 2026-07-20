@@ -7,37 +7,38 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; background: #0b0f19; color: #e5e7eb; }
-        .glass { background: rgba(31, 41, 55, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
         .no-select { user-select: none; }
-        .z-50-override { z-index: 9999 !important; }
+        /* Ensure dropdowns can escape their parent containers */
+        .overflow-visible { overflow: visible !important; }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body class="bg-gray-950 text-gray-200 min-h-screen p-4 md:p-8">
 
     <div class="max-w-7xl mx-auto">
-        <header class="glass rounded-2xl p-6 mb-8 flex flex-col md:flex-row items-center justify-between shadow-2xl">
+        <!-- Header -->
+        <div class="bg-gray-900 rounded-2xl p-6 mb-8 border border-gray-800 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
-                <h1 class="text-4xl font-bold bg-gradient-to-r from-emerald-400 to-blue-500 bg-clip-text text-transparent">Palworld Base Tracker</h1>
-                <p class="text-gray-400 mt-1">Optimization Dashboard</p>
+                <h1 class="text-3xl font-bold text-white">Palworld Base Tracker</h1>
+                <p class="text-gray-400 mt-1 text-sm">Manage your workers and optimize suitability.</p>
             </div>
-            <div class="flex items-center gap-6 mt-4 md:mt-0 bg-gray-900/50 px-6 py-3 rounded-xl border border-gray-700">
+            <div class="flex items-center gap-6 bg-gray-950 px-6 py-3 rounded-xl border border-gray-800">
                 <div class="flex flex-col items-center">
                     <span class="text-[10px] uppercase font-bold text-gray-500">Base Level</span>
                     <div class="flex items-center gap-4 mt-1">
-                        <button onclick="changeBaseLevel(-1)" class="w-8 h-8 rounded-full bg-gray-700 hover:bg-gray-600 transition"><i class="fas fa-minus text-xs"></i></button>
+                        <button id="level-down" class="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-700 transition"><i class="fas fa-minus text-xs"></i></button>
                         <span id="base-level-display" class="text-2xl font-bold w-8 text-center">1</span>
-                        <button onclick="changeBaseLevel(1)" class="w-8 h-8 rounded-full bg-gray-700 hover:bg-gray-600 transition"><i class="fas fa-plus text-xs"></i></button>
+                        <button id="level-up" class="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-700 transition"><i class="fas fa-plus text-xs"></i></button>
                     </div>
                 </div>
             </div>
-        </header>
+        </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <aside class="lg:col-span-1 space-y-4">
-                <div class="glass rounded-2xl p-6 sticky top-8">
-                    <h2 class="text-lg font-semibold mb-6 flex items-center gap-2"><i class="fas fa-chart-pie text-emerald-400"></i> Total Suitability</h2>
+            <aside class="lg:col-span-1">
+                <div class="bg-gray-900 rounded-2xl p-6 border border-gray-800 sticky top-8">
+                    <h2 class="text-lg font-semibold mb-6 flex items-center gap-2 text-white"><i class="fas fa-chart-pie text-emerald-500"></i> Suitability Tally</h2>
                     <div id="tally-list" class="space-y-3"></div>
                 </div>
             </aside>
@@ -71,39 +72,31 @@
         };
 
         function getLevelColor(level) {
-            const colors = [
-                'text-red-500 border-red-900/50 bg-red-900/20',
-                'text-orange-500 border-orange-900/50 bg-orange-900/20',
-                'text-yellow-500 border-yellow-900/50 bg-yellow-900/20',
-                'text-lime-500 border-lime-900/50 bg-lime-900/20',
-                'text-emerald-500 border-emerald-900/50 bg-emerald-900/20'
-            ];
-            const index = Math.min(Math.floor(level / 2), 4);
-            return colors[index];
+            if (level === 0) return '#4b5563'; // Gray for 0
+            const val = Math.min(level, 10);
+            const r = Math.max(150, 239 - (val * 15));
+            const g = Math.min(255, 100 + (val * 15));
+            return `rgb(${r}, ${g}, 100)`;
         }
-
-        function saveState() { localStorage.setItem('palTrackerState', JSON.stringify(state)); }
 
         async function fetchPalData() {
             try {
                 const res = await fetch('pals_database.json');
                 PAL_DATABASE = await res.json();
             } catch(e) {
-                PAL_DATABASE = [{ name: "Anubis", traits: { handiwork: 4, mining: 3 } }];
+                console.error("JSON fetch failed, using internal defaults", e);
+                PAL_DATABASE = [{ name: "Anubis", traits: { handiwork: 4, mining: 3 } }, { name: "Depresso", traits: { mining: 1, handiwork: 1 } }];
             }
             renderAll();
         }
 
-        function changeBaseLevel(val) {
-            state.baseLevel = Math.max(1, state.baseLevel + val);
-            if (val > 0) state.workers.push({ id: Date.now(), name: "", traits: {} });
-            else if (state.workers.length > 1) state.workers.pop();
-            document.getElementById('base-level-display').innerText = state.baseLevel;
-            saveState();
-            renderAll();
-        }
+        function saveState() { localStorage.setItem('palTrackerState', JSON.stringify(state)); renderAll(); }
 
-        function renderAll() { renderSummary(); renderWorkers(); }
+        function renderAll() {
+            document.getElementById('base-level-display').innerText = state.baseLevel;
+            renderSummary();
+            renderWorkers();
+        }
 
         function renderSummary() {
             const container = document.getElementById('tally-list');
@@ -114,19 +107,20 @@
 
             state.workers.forEach(w => {
                 for(let trait in w.traits) {
-                    totals[trait] = (totals[trait] || 0) + w.traits[trait];
+                    totals[trait] += w.traits[trait];
                     if (w.traits[trait] > 0) counts[trait]++;
                 }
             });
 
             SUITABILITIES.forEach(suit => {
                 const div = document.createElement('div');
-                div.className = `flex items-center justify-between p-3 rounded-lg border ${totals[suit.id] > 0 ? getLevelColor(totals[suit.id]) : 'text-gray-500 border-gray-700 bg-gray-900/50'}`;
+                const color = getLevelColor(totals[suit.id]);
+                div.className = `flex items-center justify-between p-3 rounded-lg border border-gray-800 bg-gray-950`;
                 div.innerHTML = `
-                    <span class="flex items-center gap-3 font-medium text-sm"><span class="text-lg">${suit.icon}</span> ${suit.name}</span>
+                    <span class="flex items-center gap-3 font-medium text-sm text-gray-300"><span class="text-lg">${suit.icon}</span> ${suit.name}</span>
                     <div class="flex items-center gap-4">
-                        <span class="text-[10px] uppercase font-bold opacity-70">Pals: ${counts[suit.id]}</span>
-                        <span class="font-bold text-lg">${totals[suit.id]}</span>
+                        <span class="text-[10px] uppercase font-bold text-gray-500">Pals: ${counts[suit.id]}</span>
+                        <span class="font-bold text-lg" style="color: ${color}">${totals[suit.id]}</span>
                     </div>
                 `;
                 container.appendChild(div);
@@ -138,30 +132,32 @@
             container.innerHTML = '';
             state.workers.forEach((worker, idx) => {
                 const card = document.createElement('div');
-                card.className = "glass p-5 rounded-2xl relative overflow-hidden";
+                card.className = "bg-gray-900 border border-gray-800 p-5 rounded-2xl relative overflow-visible";
                 card.innerHTML = `
-                    <div class="absolute -right-2 -top-2 text-7xl font-black text-white/5 select-none z-0">#${idx + 1}</div>
+                    <div class="absolute -right-2 -top-2 text-7xl font-black text-white/5 select-none pointer-events-none">#${idx + 1}</div>
                     <div class="relative z-10">
-                        <div class="relative">
-                            <input type="text" placeholder="Search Pal..." class="w-full bg-black/30 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:border-emerald-500 text-white" value="${worker.name}">
-                            <div class="autocomplete-results hidden absolute top-full left-0 w-full z-50-override bg-gray-900 border border-gray-700 rounded-lg shadow-2xl max-h-60 overflow-y-auto"></div>
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="relative flex-1">
+                                <input type="text" placeholder="Search Pal..." class="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-sm focus:outline-none focus:border-emerald-500 text-white" value="${worker.name || ''}">
+                                <div class="dropdown-results hidden absolute top-full left-0 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-2xl max-h-60 overflow-y-auto z-50"></div>
+                            </div>
+                            <button class="delete-btn text-gray-500 hover:text-red-400 p-2"><i class="fas fa-trash"></i></button>
                         </div>
-                        <div class="grid grid-cols-4 gap-2 mt-4"></div>
+                        <div class="grid grid-cols-4 gap-2"></div>
                     </div>
                 `;
                 
                 const input = card.querySelector('input');
-                const results = card.querySelector('.autocomplete-results');
-
+                const results = card.querySelector('.dropdown-results');
+                
                 input.oninput = (e) => {
                     const val = e.target.value.toLowerCase();
                     results.innerHTML = '';
-                    if(!val) return results.classList.add('hidden');
                     const matches = PAL_DATABASE.filter(p => p.name.toLowerCase().includes(val));
                     results.classList.toggle('hidden', matches.length === 0);
                     matches.forEach(p => {
                         const div = document.createElement('div');
-                        div.className = "p-3 hover:bg-emerald-900/50 cursor-pointer text-sm border-b border-gray-800 last:border-none text-white";
+                        div.className = "p-3 hover:bg-emerald-900/50 cursor-pointer text-sm border-b border-gray-800 text-white";
                         div.textContent = p.name;
                         div.onclick = () => {
                             worker.name = p.name;
@@ -169,23 +165,24 @@
                             results.classList.add('hidden');
                             input.value = p.name;
                             saveState();
-                            renderAll();
                         };
                         results.appendChild(div);
                     });
+                };
+
+                card.querySelector('.delete-btn').onclick = () => {
+                    worker.name = ""; worker.traits = {}; saveState();
                 };
 
                 const grid = card.querySelector('.grid');
                 SUITABILITIES.forEach(s => {
                     if (worker.traits[s.id] !== undefined && worker.traits[s.id] > 0) {
                         const btn = document.createElement('button');
-                        btn.className = `p-2 rounded-lg text-center text-xs border ${getLevelColor(worker.traits[s.id])}`;
-                        btn.innerHTML = `${s.icon}<br><span class="font-bold">${worker.traits[s.id]}</span>`;
-                        btn.onclick = () => {
-                            worker.traits[s.id] = (worker.traits[s.id] % 10) + 1;
-                            saveState();
-                            renderAll();
-                        };
+                        const color = getLevelColor(worker.traits[s.id]);
+                        btn.className = `p-2 rounded-lg text-center text-xs border bg-gray-950`;
+                        btn.style.borderColor = color;
+                        btn.innerHTML = `${s.icon}<br><span class="font-bold" style="color:${color}">${worker.traits[s.id]}</span>`;
+                        btn.onclick = () => { worker.traits[s.id] = (worker.traits[s.id] % 10) + 1; saveState(); };
                         grid.appendChild(btn);
                     }
                 });
@@ -193,10 +190,14 @@
             });
         }
 
-        window.onload = () => {
-            document.getElementById('base-level-display').innerText = state.baseLevel;
-            fetchPalData();
+        document.getElementById('level-up').onclick = () => {
+            state.baseLevel++; state.workers.push({ id: Date.now(), name: "", traits: {} }); saveState();
         };
+        document.getElementById('level-down').onclick = () => {
+            if (state.baseLevel > 1) { state.baseLevel--; state.workers.pop(); saveState(); }
+        };
+
+        window.onload = fetchPalData;
     </script>
 </body>
 </html>
