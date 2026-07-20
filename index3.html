@@ -8,20 +8,19 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; background-color: #030712; color: #e5e7eb; }
+        .dropdown-results { max-height: 300px; overflow-y: auto; z-index: 1000; }
         .no-select { user-select: none; }
-        /* Ensure dropdowns can escape their parent containers */
-        .overflow-visible { overflow: visible !important; }
     </style>
 </head>
-<body class="bg-gray-950 text-gray-200 min-h-screen p-4 md:p-8">
+<body class="p-4 md:p-8">
 
     <div class="max-w-7xl mx-auto">
-        <!-- Header -->
         <div class="bg-gray-900 rounded-2xl p-6 mb-8 border border-gray-800 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
                 <h1 class="text-3xl font-bold text-white">Palworld Base Tracker</h1>
-                <p class="text-gray-400 mt-1 text-sm">Manage your workers and optimize suitability.</p>
+                <p class="text-gray-400 mt-1 text-sm">Manage workers and track suitability.</p>
+                <div id="status-msg" class="text-[10px] mt-2 font-bold text-amber-500 uppercase">Loading Database...</div>
             </div>
             <div class="flex items-center gap-6 bg-gray-950 px-6 py-3 rounded-xl border border-gray-800">
                 <div class="flex flex-col items-center">
@@ -42,7 +41,6 @@
                     <div id="tally-list" class="space-y-3"></div>
                 </div>
             </aside>
-
             <main class="lg:col-span-3">
                 <div id="active-pals-container" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
             </main>
@@ -50,6 +48,7 @@
     </div>
 
     <script>
+        let PAL_DATABASE = [];
         const SUITABILITIES = [
             { id: 'kindling', name: 'Kindling', icon: '🔥' },
             { id: 'watering', name: 'Watering', icon: '💧' },
@@ -65,29 +64,28 @@
             { id: 'farming', name: 'Farming', icon: '🚧' }
         ];
 
-        let PAL_DATABASE = [];
-        let state = JSON.parse(localStorage.getItem('palTrackerState')) || { 
-            baseLevel: 1, 
-            workers: [{ id: Date.now(), name: "", traits: {} }] 
-        };
+        let state = JSON.parse(localStorage.getItem('palTrackerState')) || { baseLevel: 1, workers: [{ name: "", traits: {} }] };
 
         function getLevelColor(level) {
-            if (level === 0) return '#4b5563'; // Gray for 0
-            const val = Math.min(level, 10);
-            const r = Math.max(150, 239 - (val * 15));
-            const g = Math.min(255, 100 + (val * 15));
+            if (level <= 0) return '#4b5563';
+            if (level >= 10) return '#10b981';
+            const intensity = level / 10;
+            const r = Math.floor(239 - (intensity * 200));
+            const g = Math.floor(68 + (intensity * 150));
             return `rgb(${r}, ${g}, 100)`;
         }
 
-        async function fetchPalData() {
+        async function fetchDatabase() {
             try {
-                const res = await fetch('pals_database.json');
-                PAL_DATABASE = await res.json();
+                const response = await fetch('pals_database.json');
+                if(!response.ok) throw new Error();
+                PAL_DATABASE = await response.json();
+                document.getElementById('status-msg').textContent = "Database Loaded Successfully";
+                document.getElementById('status-msg').className = "text-[10px] mt-2 font-bold text-emerald-500 uppercase";
             } catch(e) {
-                console.error("JSON fetch failed, using internal defaults", e);
-                PAL_DATABASE = [{ name: "Anubis", traits: { handiwork: 4, mining: 3 } }, { name: "Depresso", traits: { mining: 1, handiwork: 1 } }];
+                console.error("Fetch failed", e);
+                document.getElementById('status-msg').textContent = "Database Load Failed (Check file/server)";
             }
-            renderAll();
         }
 
         function saveState() { localStorage.setItem('palTrackerState', JSON.stringify(state)); renderAll(); }
@@ -108,19 +106,18 @@
             state.workers.forEach(w => {
                 for(let trait in w.traits) {
                     totals[trait] += w.traits[trait];
-                    if (w.traits[trait] > 0) counts[trait]++;
+                    counts[trait]++;
                 }
             });
 
             SUITABILITIES.forEach(suit => {
                 const div = document.createElement('div');
-                const color = getLevelColor(totals[suit.id]);
-                div.className = `flex items-center justify-between p-3 rounded-lg border border-gray-800 bg-gray-950`;
+                div.className = "flex items-center justify-between p-3 rounded-lg border border-gray-800 bg-gray-950";
                 div.innerHTML = `
                     <span class="flex items-center gap-3 font-medium text-sm text-gray-300"><span class="text-lg">${suit.icon}</span> ${suit.name}</span>
-                    <div class="flex items-center gap-4">
-                        <span class="text-[10px] uppercase font-bold text-gray-500">Pals: ${counts[suit.id]}</span>
-                        <span class="font-bold text-lg" style="color: ${color}">${totals[suit.id]}</span>
+                    <div class="flex flex-col items-end">
+                        <span class="text-[9px] uppercase font-bold text-gray-600">Pals: ${counts[suit.id]}</span>
+                        <span class="font-bold text-lg" style="color: ${getLevelColor(totals[suit.id])}">${totals[suit.id]}</span>
                     </div>
                 `;
                 container.appendChild(div);
@@ -135,11 +132,11 @@
                 card.className = "bg-gray-900 border border-gray-800 p-5 rounded-2xl relative overflow-visible";
                 card.innerHTML = `
                     <div class="absolute -right-2 -top-2 text-7xl font-black text-white/5 select-none pointer-events-none">#${idx + 1}</div>
-                    <div class="relative z-10">
+                    <div class="relative z-20">
                         <div class="flex items-center gap-2 mb-4">
                             <div class="relative flex-1">
                                 <input type="text" placeholder="Search Pal..." class="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-sm focus:outline-none focus:border-emerald-500 text-white" value="${worker.name || ''}">
-                                <div class="dropdown-results hidden absolute top-full left-0 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-2xl max-h-60 overflow-y-auto z-50"></div>
+                                <div class="dropdown-results hidden absolute top-full left-0 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-2xl mt-1"></div>
                             </div>
                             <button class="delete-btn text-gray-500 hover:text-red-400 p-2"><i class="fas fa-trash"></i></button>
                         </div>
@@ -153,33 +150,26 @@
                 input.oninput = (e) => {
                     const val = e.target.value.toLowerCase();
                     results.innerHTML = '';
+                    if(!val) { results.classList.add('hidden'); return; }
                     const matches = PAL_DATABASE.filter(p => p.name.toLowerCase().includes(val));
                     results.classList.toggle('hidden', matches.length === 0);
                     matches.forEach(p => {
                         const div = document.createElement('div');
                         div.className = "p-3 hover:bg-emerald-900/50 cursor-pointer text-sm border-b border-gray-800 text-white";
                         div.textContent = p.name;
-                        div.onclick = () => {
-                            worker.name = p.name;
-                            worker.traits = {...p.traits};
-                            results.classList.add('hidden');
-                            input.value = p.name;
-                            saveState();
-                        };
+                        div.onclick = () => { worker.name = p.name; worker.traits = {...p.traits}; results.classList.add('hidden'); saveState(); };
                         results.appendChild(div);
                     });
                 };
 
-                card.querySelector('.delete-btn').onclick = () => {
-                    worker.name = ""; worker.traits = {}; saveState();
-                };
+                card.querySelector('.delete-btn').onclick = () => { worker.name = ""; worker.traits = {}; saveState(); };
 
                 const grid = card.querySelector('.grid');
                 SUITABILITIES.forEach(s => {
-                    if (worker.traits[s.id] !== undefined && worker.traits[s.id] > 0) {
+                    if (worker.traits[s.id] !== undefined) {
                         const btn = document.createElement('button');
                         const color = getLevelColor(worker.traits[s.id]);
-                        btn.className = `p-2 rounded-lg text-center text-xs border bg-gray-950`;
+                        btn.className = "p-2 rounded-lg text-center text-xs border bg-gray-950 transition-all hover:scale-105";
                         btn.style.borderColor = color;
                         btn.innerHTML = `${s.icon}<br><span class="font-bold" style="color:${color}">${worker.traits[s.id]}</span>`;
                         btn.onclick = () => { worker.traits[s.id] = (worker.traits[s.id] % 10) + 1; saveState(); };
@@ -190,14 +180,10 @@
             });
         }
 
-        document.getElementById('level-up').onclick = () => {
-            state.baseLevel++; state.workers.push({ id: Date.now(), name: "", traits: {} }); saveState();
-        };
-        document.getElementById('level-down').onclick = () => {
-            if (state.baseLevel > 1) { state.baseLevel--; state.workers.pop(); saveState(); }
-        };
-
-        window.onload = fetchPalData;
+        document.getElementById('level-up').onclick = () => { state.baseLevel++; state.workers.push({ name: "", traits: {} }); saveState(); };
+        document.getElementById('level-down').onclick = () => { if (state.baseLevel > 1) { state.baseLevel--; state.workers.pop(); saveState(); } };
+        
+        fetchDatabase().then(renderAll);
     </script>
 </body>
 </html>
