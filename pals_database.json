@@ -1,4 +1,3 @@
-[
 { "name": "Lamball", "traits": { "handiwork": 1, "transporting": 1, "farming": 1 } },
 { "name": "Cattiva", "traits": { "handiwork": 1, "transporting": 1, "gathering": 1, "mining": 1 } },
 { "name": "Chikipi", "traits": { "gathering": 1, "farming": 1 } },
